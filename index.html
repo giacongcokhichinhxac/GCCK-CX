@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production Control - ERP</title>
+    
+    <!-- Tải TailwindCSS để làm giao diện -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Tải React và ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Tải Babel để dịch mã JSX sang JavaScript chạy được trên trình duyệt -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tải Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Cấu hình Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: '#0f172a',
+                        primary: '#2563eb',
+                        accent: '#f97316',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f3f4f6; font-family: sans-serif; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- Bắt đầu code React -->
+    <script type="text/babel">
+        const { useState, useEffect, createContext, useContext } = React;
+
+        // ==========================================
+        // 1. CẤU HÌNH SUPABASE (BẠN CẦN SỬA 2 DÒNG NÀY)
+        // ==========================================
+        const SUPABASE_URL = "https://dwrwxtjraerkhzhzaqs.supabase.co"; // Thay bằng URL của bạn
+        const SUPABASE_ANON_KEY = "sb_publishable_oZrP8Gf_ASPRMkQEQ6BBCw_s6vd1gGT"; // Thay bằng Anon Key của bạn
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ==========================================
+        // 2. QUẢN LÝ ĐĂNG NHẬP (AUTH CONTEXT)
+        // ==========================================
+        const AuthContext = createContext(null);
+
+        function AuthProvider({ children }) {
+            const [session, setSession] = useState(null);
+            const [profile, setProfile] = useState(null);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                // Kiểm tra session hiện tại
+                supabase.auth.getSession().then(({ data: { session } }) => {
+                    setSession(session);
+                    if (session) fetchProfile(session.user.id);
+                    else setLoading(false);
+                });
+
+                // Lắng nghe sự kiện đăng nhập/đăng xuất
+                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+                    setSession(session);
+                    if (session) fetchProfile(session.user.id);
+                    else {
+                        setProfile(null);
+                        setLoading(false);
+                    }
+                });
+
+                return () => subscription.unsubscribe();
+            }, []);
+
+            const fetchProfile = async (userId) => {
+                const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+                setProfile(data);
+                setLoading(false);
+            };
+
+            const signIn = async (email, password) => {
+                return await supabase.auth.signInWithPassword({ email, password });
+            };
+
+            const signOut = async () => {
+                await supabase.auth.signOut();
+            };
+
+            return (
+                <AuthContext.Provider value={{ session, profile, loading, signIn, signOut }}>
+                    {children}
+                </AuthContext.Provider>
+            );
+        }
+
+        const useAuth = () => useContext(AuthContext);
+
+        // ==========================================
+        // 3. GIAO DIỆN ĐĂNG NHẬP
+        // ==========================================
+        function Login() {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [errorMsg, setErrorMsg] = useState('');
+            const { signIn } = useAuth();
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                const { error } = await signIn(email, password);
+                if (error) setErrorMsg(error.message);
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-navy">
+                    <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+                        <h1 className="text-2xl font-bold text-center text-navy mb-6">PRODUCTION CONTROL</h1>
+                        {errorMsg && <div className="bg-red-100 text-red-600 p-3 rounded mb-4 text-sm">{errorMsg}</div>}
+                        <form onSubmit={handleLogin} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Email</label>
+                                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+                                    className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primary" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Mật khẩu</label>
+                                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
+                                    className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-primary" />
+                            </div>
+                            <button type="submit" className="w-full bg-primary text-white p-2 rounded-md hover:bg-blue-700 transition">
+                                Đăng nhập
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==========================================
+        // 4. GIAO DIỆN CHÍNH (DASHBOARD & LAYOUT)
+        // ==========================================
+        function Dashboard() {
+            return (
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-800 mb-6">Dashboard Tổng Quan</h1>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        {[
+                            { title: 'Tổng đơn hàng', value: '0', color: 'bg-blue-500' },
+                            { title: 'Đang sản xuất', value: '0', color: 'bg-orange-500' },
+                            { title: 'Đã hoàn thành', value: '0', color: 'bg-green-500' },
+                            { title: 'Đơn trễ tiến độ', value: '0', color: 'bg-red-500' },
+                        ].map((item, idx) => (
+                            <div key={idx} className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+                                <h3 className="text-gray-500 text-sm font-medium">{item.title}</h3>
+                                <p className="text-3xl font-bold mt-2">{item.value}</p>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="mt-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 h-64 flex items-center justify-center text-gray-400">
+                        Biểu đồ tiến độ sẽ được hiển thị ở đây
+                    </div>
+                </div>
+            );
+        }
+
+        function DesktopLayout({ children }) {
+            const { profile, signOut } = useAuth();
+            
+            // Tạm thời chỉ hiển thị menu Dashboard
+            const menuItems = [
+                { name: 'Dashboard', active: true },
+                { name: 'Quản lý đơn hàng', active: false },
+                { name: 'BOM giao việc', active: false },
+                { name: 'Tiến độ sản xuất', active: false },
+                { name: 'Nhận vật tư QR', active: false },
+                { name: 'Giao hàng QR', active: false },
+            ];
+
+            return (
+                <div className="flex h-screen overflow-hidden">
+                    {/* Sidebar */}
+                    <aside className="w-64 bg-navy text-white flex flex-col">
+                        <div className="h-16 flex items-center justify-center border-b border-gray-700">
+                            <h2 className="text-xl font-bold tracking-wider">PRODUCTION</h2>
+                        </div>
+                        <nav className="flex-1 overflow-y-auto py-4">
+                            {menuItems.map((item, index) => (
+                                <div key={index} className={`flex items-center px-6 py-3 cursor-pointer ${item.active ? 'bg-primary border-r-4 border-accent' : 'hover:bg-gray-800'}`}>
+                                    <span className="text-sm font-medium">{item.name}</span>
+                                </div>
+                            ))}
+                        </nav>
+                    </aside>
+
+                    {/* Main Content */}
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                        <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6">
+                            <div className="text-lg font-semibold text-gray-700">
+                                Hệ thống Quản lý Sản xuất
+                            </div>
+                            <div className="flex items-center space-x-4">
+                                <span className="text-sm text-gray-600">Xin chào, <strong>{profile?.full_name || 'Admin'}</strong></span>
+                                <button onClick={signOut} className="text-red-500 hover:text-red-700 text-sm font-medium">
+                                    Đăng xuất
+                                </button>
+                            </div>
+                        </header>
+
+                        <main className="flex-1 overflow-y-auto p-6">
+                            {children}
+                        </main>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==========================================
+        // 5. ĐIỀU HƯỚNG CHÍNH (APP)
+        // ==========================================
+        function App() {
+            const { session, loading } = useAuth();
+
+            if (loading) {
+                return <div className="h-screen flex items-center justify-center text-xl">Đang tải hệ thống...</div>;
+            }
+
+            if (!session) {
+                return <Login />;
+            }
+
+            return (
+                <DesktopLayout>
+                    <Dashboard />
+                </DesktopLayout>
+            );
+        }
+
+        // Render React vào thẻ div id="root"
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(
+            <AuthProvider>
+                <App />
+            </AuthProvider>
+        );
+    </script>
+</body>
+</html>
