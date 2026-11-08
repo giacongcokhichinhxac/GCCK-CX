@@ -5,20 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Production Control - ERP</title>
     
-    <!-- Tải TailwindCSS để làm giao diện -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Tải React và ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- Tải Babel để dịch mã JSX sang JavaScript chạy được trên trình duyệt -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Tải Supabase Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
-    <!-- Cấu hình Tailwind -->
     <script>
         tailwind.config = {
             theme: {
@@ -39,20 +31,19 @@
 <body>
     <div id="root"></div>
 
-    <!-- Bắt đầu code React -->
     <script type="text/babel">
         const { useState, useEffect, createContext, useContext } = React;
 
         // ==========================================
-        // 1. CẤU HÌNH SUPABASE (BẠN CẦN SỬA 2 DÒNG NÀY)
+        // 1. CẤU HÌNH SUPABASE (GIỮ NGUYÊN CỦA BẠN)
         // ==========================================
-        const SUPABASE_URL = "https://dwrwvxtjraerrkzhzaqs.supabase.co"; // Thay bằng URL của bạn
-        const SUPABASE_ANON_KEY = "sb_publishable_oZrP8Gf_ASPRMkQEQ6BBCw_s6vd1gGT"; // Thay bằng Anon Key của bạn
+        const SUPABASE_URL = "https://dwrwxtjraerrkzhzaqs.supabase.co"; 
+        const SUPABASE_ANON_KEY = "sb_publishable_ozrP8Gf_ASPRMKQE6BBCw_s6vd1gGT"; 
         
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         // ==========================================
-        // 2. QUẢN LÝ ĐĂNG NHẬP (AUTH CONTEXT)
+        // 2. QUẢN LÝ ĐĂNG NHẬP
         // ==========================================
         const AuthContext = createContext(null);
 
@@ -62,14 +53,12 @@
             const [loading, setLoading] = useState(true);
 
             useEffect(() => {
-                // Kiểm tra session hiện tại
                 supabase.auth.getSession().then(({ data: { session } }) => {
                     setSession(session);
                     if (session) fetchProfile(session.user.id);
                     else setLoading(false);
                 });
 
-                // Lắng nghe sự kiện đăng nhập/đăng xuất
                 const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
                     setSession(session);
                     if (session) fetchProfile(session.user.id);
@@ -146,7 +135,7 @@
         }
 
         // ==========================================
-        // 4. GIAO DIỆN CHÍNH (DASHBOARD & LAYOUT)
+        // 4. CÁC TRANG (PAGES)
         // ==========================================
         function Dashboard() {
             return (
@@ -172,43 +161,152 @@
             );
         }
 
-        function DesktopLayout({ children }) {
+        // --- QUẢN LÝ ĐƠN HÀNG (MỚI) ---
+        function Orders() {
+            const [orders, setOrders] = useState([]);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [formData, setFormData] = useState({ lsx: '', customer: '', name: '', due_date: '' });
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                fetchOrders();
+            }, []);
+
+            const fetchOrders = async () => {
+                setLoading(true);
+                const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+                if (!error) setOrders(data);
+                setLoading(false);
+            };
+
+            const handleCreate = async (e) => {
+                e.preventDefault();
+                const { error } = await supabase.from('orders').insert([formData]);
+                if (error) alert("Lỗi: " + error.message);
+                else {
+                    setIsModalOpen(false);
+                    setFormData({ lsx: '', customer: '', name: '', due_date: '' });
+                    fetchOrders();
+                }
+            };
+
+            return (
+                <div>
+                    <div className="flex justify-between items-center mb-6">
+                        <h1 className="text-2xl font-bold text-gray-800">Quản lý Đơn hàng</h1>
+                        <button onClick={() => setIsModalOpen(true)} className="bg-primary text-white px-4 py-2 rounded shadow hover:bg-blue-700">
+                            + Tạo Đơn Hàng Mới
+                        </button>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">LSX</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Khách hàng</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tên đơn hàng</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hạn chót</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {loading ? (
+                                    <tr><td colSpan="5" className="text-center py-4">Đang tải...</td></tr>
+                                ) : orders.length === 0 ? (
+                                    <tr><td colSpan="5" className="text-center py-8 text-gray-500">Chưa có đơn hàng nào. Hãy tạo mới!</td></tr>
+                                ) : (
+                                    orders.map((order) => (
+                                        <tr key={order.id}>
+                                            <td className="px-6 py-4 whitespace-nowrap font-medium text-primary">{order.lsx}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap">{order.customer}</td>
+                                            <td className="px-6 py-4">{order.name}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap">{order.due_date || '---'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                                                    {order.status}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Modal Tạo Đơn */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white p-6 rounded-lg w-full max-w-md shadow-2xl">
+                                <h2 className="text-xl font-bold mb-4">Tạo Đơn Hàng Mới</h2>
+                                <form onSubmit={handleCreate} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium">Mã LSX</label>
+                                        <input type="text" value={formData.lsx} onChange={(e) => setFormData({...formData, lsx: e.target.value})} required className="w-full border p-2 rounded" placeholder="VD: KDN.165/11" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium">Khách hàng</label>
+                                        <input type="text" value={formData.customer} onChange={(e) => setFormData({...formData, customer: e.target.value})} className="w-full border p-2 rounded" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium">Tên đơn hàng</label>
+                                        <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required className="w-full border p-2 rounded" placeholder="VD: Thùng ngũ cốc OP-365" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium">Hạn chót</label>
+                                        <input type="date" value={formData.due_date} onChange={(e) => setFormData({...formData, due_date: e.target.value})} className="w-full border p-2 rounded" />
+                                    </div>
+                                    <div className="flex justify-end space-x-3 mt-6">
+                                        <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border rounded hover:bg-gray-50">Hủy</button>
+                                        <button type="submit" className="px-4 py-2 bg-primary text-white rounded hover:bg-blue-700">Lưu Đơn Hàng</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ==========================================
+        // 5. LAYOUT CHÍNH & ĐIỀU HƯỚNG
+        // ==========================================
+        function DesktopLayout({ children, currentPage, setCurrentPage }) {
             const { profile, signOut } = useAuth();
             
-            // Tạm thời chỉ hiển thị menu Dashboard
             const menuItems = [
-                { name: 'Dashboard', active: true },
-                { name: 'Quản lý đơn hàng', active: false },
-                { name: 'BOM giao việc', active: false },
-                { name: 'Tiến độ sản xuất', active: false },
-                { name: 'Nhận vật tư QR', active: false },
-                { name: 'Giao hàng QR', active: false },
+                { id: 'dashboard', name: 'Dashboard' },
+                { id: 'orders', name: 'Quản lý đơn hàng' },
+                { id: 'bom', name: 'BOM giao việc' },
+                { id: 'progress', name: 'Tiến độ sản xuất' },
+                { id: 'scan-receipt', name: 'Nhận vật tư QR' },
+                { id: 'scan-delivery', name: 'Giao hàng QR' },
             ];
 
             return (
                 <div className="flex h-screen overflow-hidden">
-                    {/* Sidebar */}
                     <aside className="w-64 bg-navy text-white flex flex-col">
                         <div className="h-16 flex items-center justify-center border-b border-gray-700">
                             <h2 className="text-xl font-bold tracking-wider">PRODUCTION</h2>
                         </div>
                         <nav className="flex-1 overflow-y-auto py-4">
-                            {menuItems.map((item, index) => (
-                                <div key={index} className={`flex items-center px-6 py-3 cursor-pointer ${item.active ? 'bg-primary border-r-4 border-accent' : 'hover:bg-gray-800'}`}>
+                            {menuItems.map((item) => (
+                                <div key={item.id} 
+                                     onClick={() => setCurrentPage(item.id)}
+                                     className={`flex items-center px-6 py-3 cursor-pointer transition ${currentPage === item.id ? 'bg-primary border-r-4 border-accent' : 'hover:bg-gray-800'}`}>
                                     <span className="text-sm font-medium">{item.name}</span>
                                 </div>
                             ))}
                         </nav>
                     </aside>
 
-                    {/* Main Content */}
                     <div className="flex-1 flex flex-col overflow-hidden">
                         <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6">
                             <div className="text-lg font-semibold text-gray-700">
                                 Hệ thống Quản lý Sản xuất
                             </div>
                             <div className="flex items-center space-x-4">
-                                <span className="text-sm text-gray-600">Xin chào, <strong>{profile?.full_name || 'Admin'}</strong></span>
+                                <span className="text-sm text-gray-600">Xin chào, <strong>{profile?.full_name || 'Quản trị viên'}</strong></span>
                                 <button onClick={signOut} className="text-red-500 hover:text-red-700 text-sm font-medium">
                                     Đăng xuất
                                 </button>
@@ -223,32 +321,30 @@
             );
         }
 
-        // ==========================================
-        // 5. ĐIỀU HƯỚNG CHÍNH (APP)
-        // ==========================================
-        function App() {
+        function MainApp() {
             const { session, loading } = useAuth();
+            const [currentPage, setCurrentPage] = useState('dashboard');
 
-            if (loading) {
-                return <div className="h-screen flex items-center justify-center text-xl">Đang tải hệ thống...</div>;
-            }
-
-            if (!session) {
-                return <Login />;
-            }
+            if (loading) return <div className="h-screen flex items-center justify-center text-xl">Đang tải hệ thống...</div>;
+            if (!session) return <Login />;
 
             return (
-                <DesktopLayout>
-                    <Dashboard />
+                <DesktopLayout currentPage={currentPage} setCurrentPage={setCurrentPage}>
+                    {currentPage === 'dashboard' && <Dashboard />}
+                    {currentPage === 'orders' && <Orders />}
+                    {currentPage !== 'dashboard' && currentPage !== 'orders' && (
+                        <div className="p-6 bg-white rounded shadow text-center text-gray-500">
+                            Chức năng này sẽ được cập nhật ở giai đoạn tiếp theo!
+                        </div>
+                    )}
                 </DesktopLayout>
             );
         }
 
-        // Render React vào thẻ div id="root"
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(
             <AuthProvider>
-                <App />
+                <MainApp />
             </AuthProvider>
         );
     </script>
